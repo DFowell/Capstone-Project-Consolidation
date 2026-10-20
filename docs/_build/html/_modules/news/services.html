@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>news.services &#8212; The Newsroom 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <script src="../../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for news.services</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Side effects that run when an article is approved.</span>
+
+<span class="sd">Kept separate from the signal handlers so the logic is easy to test and to</span>
+<span class="sd">reuse from a view if the signal approach is ever swapped for "Option 2".</span>
+<span class="sd">"""</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">smtplib</span><span class="w"> </span><span class="kn">import</span> <span class="n">SMTPException</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">django.conf</span><span class="w"> </span><span class="kn">import</span> <span class="n">settings</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">django.contrib.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_user_model</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">django.core.mail</span><span class="w"> </span><span class="kn">import</span> <span class="n">EmailMessage</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">django.db.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Q</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">django.urls</span><span class="w"> </span><span class="kn">import</span> <span class="n">reverse</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="get_subscriber_emails">
+<a class="viewcode-back" href="../../api.html#news.services.get_subscriber_emails">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_subscriber_emails</span><span class="p">(</span><span class="n">article</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Return e-mail addresses of readers following the article's source.</span>
+
+<span class="sd">    A reader qualifies if they subscribe to the article's author or to its</span>
+<span class="sd">    publisher (when it has one). Readers without an address are skipped.</span>
+
+<span class="sd">    :param article: the approved :class:`news.models.Article`.</span>
+<span class="sd">    :returns: a list of unique e-mail address strings (possibly empty).</span>
+<span class="sd">    :rtype: list[str]</span>
+<span class="sd">    """</span>
+    <span class="n">user_model</span> <span class="o">=</span> <span class="n">get_user_model</span><span class="p">()</span>
+    <span class="n">criteria</span> <span class="o">=</span> <span class="n">Q</span><span class="p">(</span><span class="n">subscribed_journalists</span><span class="o">=</span><span class="n">article</span><span class="o">.</span><span class="n">author</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">article</span><span class="o">.</span><span class="n">publisher_id</span><span class="p">:</span>
+        <span class="n">criteria</span> <span class="o">|=</span> <span class="n">Q</span><span class="p">(</span><span class="n">subscribed_publishers</span><span class="o">=</span><span class="n">article</span><span class="o">.</span><span class="n">publisher</span><span class="p">)</span>
+    <span class="n">readers</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">user_model</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">criteria</span><span class="p">,</span> <span class="n">role</span><span class="o">=</span><span class="n">user_model</span><span class="o">.</span><span class="n">Role</span><span class="o">.</span><span class="n">READER</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">exclude</span><span class="p">(</span><span class="n">email</span><span class="o">=</span><span class="s2">""</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">distinct</span><span class="p">()</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">readers</span><span class="o">.</span><span class="n">values_list</span><span class="p">(</span><span class="s2">"email"</span><span class="p">,</span> <span class="n">flat</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span></div>
+
+
+
+<div class="viewcode-block" id="send_approval_email">
+<a class="viewcode-back" href="../../api.html#news.services.send_approval_email">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">send_approval_email</span><span class="p">(</span><span class="n">article</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""E-mail the approved article to its subscribers.</span>
+
+<span class="sd">    Delivery errors are logged rather than raised so a mail outage cannot</span>
+<span class="sd">    block an editor's approval. Subscribers are blind-copied so they cannot</span>
+<span class="sd">    see each other's addresses.</span>
+
+<span class="sd">    :param article: the approved :class:`news.models.Article`.</span>
+<span class="sd">    :returns: the number of recipients e-mailed (``0`` if there were none</span>
+<span class="sd">        or the mail could not be sent).</span>
+<span class="sd">    :rtype: int</span>
+<span class="sd">    """</span>
+    <span class="n">recipients</span> <span class="o">=</span> <span class="n">get_subscriber_emails</span><span class="p">(</span><span class="n">article</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">recipients</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">0</span>
+
+    <span class="n">source</span> <span class="o">=</span> <span class="n">article</span><span class="o">.</span><span class="n">publisher</span><span class="o">.</span><span class="n">name</span> <span class="k">if</span> <span class="n">article</span><span class="o">.</span><span class="n">publisher_id</span> <span class="k">else</span> <span class="s2">"independent"</span>
+    <span class="n">link</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">SITE_URL</span> <span class="o">+</span> <span class="n">reverse</span><span class="p">(</span>
+        <span class="s2">"news:article_detail"</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="n">article</span><span class="o">.</span><span class="n">pk</span><span class="p">]</span>
+    <span class="p">)</span>
+    <span class="n">body</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">article</span><span class="o">.</span><span class="n">title</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"By </span><span class="si">{</span><span class="n">article</span><span class="o">.</span><span class="n">author</span><span class="o">.</span><span class="n">get_username</span><span class="p">()</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">source</span><span class="si">}</span><span class="s2">)</span><span class="se">\n\n</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">article</span><span class="o">.</span><span class="n">content</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"Read it online: </span><span class="si">{</span><span class="n">link</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
+    <span class="p">)</span>
+    <span class="n">message</span> <span class="o">=</span> <span class="n">EmailMessage</span><span class="p">(</span>
+        <span class="n">subject</span><span class="o">=</span><span class="sa">f</span><span class="s2">"New article: </span><span class="si">{</span><span class="n">article</span><span class="o">.</span><span class="n">title</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+        <span class="n">body</span><span class="o">=</span><span class="n">body</span><span class="p">,</span>
+        <span class="n">to</span><span class="o">=</span><span class="p">[</span><span class="n">settings</span><span class="o">.</span><span class="n">DEFAULT_FROM_EMAIL</span><span class="p">],</span>
+        <span class="n">bcc</span><span class="o">=</span><span class="n">recipients</span><span class="p">,</span>  <span class="c1"># hide subscribers' addresses from each other</span>
+    <span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">message</span><span class="o">.</span><span class="n">send</span><span class="p">()</span>
+    <span class="k">except</span> <span class="p">(</span><span class="n">SMTPException</span><span class="p">,</span> <span class="ne">OSError</span><span class="p">):</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">"Could not e-mail article </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">article</span><span class="o">.</span><span class="n">pk</span><span class="p">)</span>
+        <span class="k">return</span> <span class="mi">0</span>
+    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">recipients</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="build_approval_payload">
+<a class="viewcode-back" href="../../api.html#news.services.build_approval_payload">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">build_approval_payload</span><span class="p">(</span><span class="n">article</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Return the JSON-serialisable dict sent to ``/api/approved/``.</span>
+
+<span class="sd">    :param article: the approved :class:`news.models.Article`.</span>
+<span class="sd">    :returns: a dict with the article id, title, content, author and</span>
+<span class="sd">        publisher names, approving editor and creation time.</span>
+<span class="sd">    :rtype: dict</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">"article_id"</span><span class="p">:</span> <span class="n">article</span><span class="o">.</span><span class="n">pk</span><span class="p">,</span>
+        <span class="s2">"title"</span><span class="p">:</span> <span class="n">article</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
+        <span class="s2">"content"</span><span class="p">:</span> <span class="n">article</span><span class="o">.</span><span class="n">content</span><span class="p">,</span>
+        <span class="s2">"author"</span><span class="p">:</span> <span class="n">article</span><span class="o">.</span><span class="n">author</span><span class="o">.</span><span class="n">get_username</span><span class="p">(),</span>
+        <span class="s2">"publisher"</span><span class="p">:</span> <span class="n">article</span><span class="o">.</span><span class="n">publisher</span><span class="o">.</span><span class="n">name</span> <span class="k">if</span> <span class="n">article</span><span class="o">.</span><span class="n">publisher_id</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="s2">"approved_by"</span><span class="p">:</span> <span class="p">(</span>
+            <span class="n">article</span><span class="o">.</span><span class="n">approved_by</span><span class="o">.</span><span class="n">get_username</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">article</span><span class="o">.</span><span class="n">approved_by_id</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="p">),</span>
+        <span class="s2">"created_at"</span><span class="p">:</span> <span class="n">article</span><span class="o">.</span><span class="n">created_at</span><span class="o">.</span><span class="n">isoformat</span><span class="p">(),</span>
+    <span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="post_approved_article">
+<a class="viewcode-back" href="../../api.html#news.services.post_approved_article">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">post_approved_article</span><span class="p">(</span><span class="n">article</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""POST the approved article to our own RESTful endpoint.</span>
+
+<span class="sd">    Network problems are logged, not raised, so approval never fails</span>
+<span class="sd">    because the endpoint is unreachable.</span>
+
+<span class="sd">    :param article: the approved :class:`news.models.Article`.</span>
+<span class="sd">    :returns: ``True`` if the endpoint accepted the POST, otherwise</span>
+<span class="sd">        ``False`` (also when ``APPROVED_API_URL`` is empty).</span>
+<span class="sd">    :rtype: bool</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">settings</span><span class="o">.</span><span class="n">APPROVED_API_URL</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span>
+            <span class="n">settings</span><span class="o">.</span><span class="n">APPROVED_API_URL</span><span class="p">,</span>
+            <span class="n">json</span><span class="o">=</span><span class="n">build_approval_payload</span><span class="p">(</span><span class="n">article</span><span class="p">),</span>
+            <span class="n">headers</span><span class="o">=</span><span class="p">{</span><span class="s2">"X-Internal-Token"</span><span class="p">:</span> <span class="n">settings</span><span class="o">.</span><span class="n">APPROVED_API_TOKEN</span><span class="p">},</span>
+            <span class="n">timeout</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">APPROVED_API_TIMEOUT</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+    <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">RequestException</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="s2">"Could not POST approved article </span><span class="si">%s</span><span class="s2"> to </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span>
+            <span class="n">article</span><span class="o">.</span><span class="n">pk</span><span class="p">,</span> <span class="n">settings</span><span class="o">.</span><span class="n">APPROVED_API_URL</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="kc">True</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">The Newsroom</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">Code reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

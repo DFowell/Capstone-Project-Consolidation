@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>news.permissions &#8212; The Newsroom 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <script src="../../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for news.permissions</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Role checks shared by the web views and the REST API."""</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">hmac</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">django.conf</span><span class="w"> </span><span class="kn">import</span> <span class="n">settings</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">rest_framework.permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">SAFE_METHODS</span><span class="p">,</span> <span class="n">BasePermission</span>
+
+
+<div class="viewcode-block" id="is_editor">
+<a class="viewcode-back" href="../../api.html#news.permissions.is_editor">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">is_editor</span><span class="p">(</span><span class="n">user</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Return True for editors (superusers count as editors).</span>
+
+<span class="sd">    :param user: the user to check.</span>
+<span class="sd">    :rtype: bool</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="n">user</span><span class="o">.</span><span class="n">is_authenticated</span> <span class="ow">and</span> <span class="p">(</span><span class="n">user</span><span class="o">.</span><span class="n">is_superuser</span> <span class="ow">or</span> <span class="n">user</span><span class="o">.</span><span class="n">is_editor</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="is_journalist">
+<a class="viewcode-back" href="../../api.html#news.permissions.is_journalist">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">is_journalist</span><span class="p">(</span><span class="n">user</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Return True for journalists.</span>
+
+<span class="sd">    :param user: the user to check.</span>
+<span class="sd">    :rtype: bool</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="n">user</span><span class="o">.</span><span class="n">is_authenticated</span> <span class="ow">and</span> <span class="n">user</span><span class="o">.</span><span class="n">is_journalist</span></div>
+
+
+
+<div class="viewcode-block" id="can_manage">
+<a class="viewcode-back" href="../../api.html#news.permissions.can_manage">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">can_manage</span><span class="p">(</span><span class="n">user</span><span class="p">,</span> <span class="n">owner_id</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Say whether a user may change or delete a piece of content.</span>
+
+<span class="sd">    :param user: the user attempting the change.</span>
+<span class="sd">    :param owner_id: primary key of the content's author.</span>
+<span class="sd">    :returns: ``True`` for editors, or for the journalist who owns it.</span>
+<span class="sd">    :rtype: bool</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="n">is_editor</span><span class="p">(</span><span class="n">user</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">is_journalist</span><span class="p">(</span><span class="n">user</span><span class="p">)</span> <span class="ow">and</span> <span class="n">user</span><span class="o">.</span><span class="n">pk</span> <span class="o">==</span> <span class="n">owner_id</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="ContentPermission">
+<a class="viewcode-back" href="../../api.html#news.permissions.ContentPermission">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ContentPermission</span><span class="p">(</span><span class="n">BasePermission</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Role-based access for articles and newsletters in the API.</span>
+
+<span class="sd">    * Anyone authenticated can read.</span>
+<span class="sd">    * Only journalists can create (POST).</span>
+<span class="sd">    * Editors and journalists can update/delete; a journalist is limited to</span>
+<span class="sd">      their own items (checked per object).</span>
+<span class="sd">    """</span>
+
+<div class="viewcode-block" id="ContentPermission.has_permission">
+<a class="viewcode-back" href="../../api.html#news.permissions.ContentPermission.has_permission">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">view</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Check the request method against the user's role."""</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">user</span> <span class="ow">and</span> <span class="n">user</span><span class="o">.</span><span class="n">is_authenticated</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">method</span> <span class="ow">in</span> <span class="n">SAFE_METHODS</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">method</span> <span class="o">==</span> <span class="s2">"POST"</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">is_journalist</span><span class="p">(</span><span class="n">user</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">is_editor</span><span class="p">(</span><span class="n">user</span><span class="p">)</span> <span class="ow">or</span> <span class="n">is_journalist</span><span class="p">(</span><span class="n">user</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ContentPermission.has_object_permission">
+<a class="viewcode-back" href="../../api.html#news.permissions.ContentPermission.has_object_permission">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_object_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">view</span><span class="p">,</span> <span class="n">obj</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Allow reads, but restrict writes to editors and the owner."""</span>
+        <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">method</span> <span class="ow">in</span> <span class="n">SAFE_METHODS</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="n">can_manage</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="p">,</span> <span class="n">obj</span><span class="o">.</span><span class="n">author_id</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="InternalTokenPermission">
+<a class="viewcode-back" href="../../api.html#news.permissions.InternalTokenPermission">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">InternalTokenPermission</span><span class="p">(</span><span class="n">BasePermission</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Allow only callers presenting the shared internal token."""</span>
+
+<div class="viewcode-block" id="InternalTokenPermission.has_permission">
+<a class="viewcode-back" href="../../api.html#news.permissions.InternalTokenPermission.has_permission">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">view</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Compare the X-Internal-Token header in constant time."""</span>
+        <span class="n">supplied</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"X-Internal-Token"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
+        <span class="n">expected</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">APPROVED_API_TOKEN</span>
+        <span class="k">return</span> <span class="n">hmac</span><span class="o">.</span><span class="n">compare_digest</span><span class="p">(</span><span class="n">supplied</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span> <span class="n">expected</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span></div>
+</div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">The Newsroom</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">Code reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>news.signals &#8212; The Newsroom 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <script src="../../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for news.signals</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Signal handlers (implementation strategy "Option 1" from the brief).</span>
+
+<span class="sd">* ``pre_save``/``post_save`` on ``Article`` detect the moment an article</span>
+<span class="sd">  becomes approved and trigger the e-mail and the POST to ``/api/approved/``.</span>
+<span class="sd">* ``m2m_changed`` keeps reader subscriptions reader-only.</span>
+<span class="sd">* ``create_role_groups`` builds the Reader/Editor/Journalist groups.</span>
+<span class="sd">"""</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">django.contrib.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_user_model</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">django.db.models.signals</span><span class="w"> </span><span class="kn">import</span> <span class="n">m2m_changed</span><span class="p">,</span> <span class="n">post_save</span><span class="p">,</span> <span class="n">pre_save</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">django.dispatch</span><span class="w"> </span><span class="kn">import</span> <span class="n">receiver</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.groups</span><span class="w"> </span><span class="kn">import</span> <span class="n">setup_role_groups</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Article</span><span class="p">,</span> <span class="n">CustomUser</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.services</span><span class="w"> </span><span class="kn">import</span> <span class="n">post_approved_article</span><span class="p">,</span> <span class="n">send_approval_email</span>
+
+
+<div class="viewcode-block" id="create_role_groups">
+<a class="viewcode-back" href="../../api.html#news.signals.create_role_groups">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">create_role_groups</span><span class="p">(</span><span class="n">sender</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""post_migrate handler: create role groups and their permissions."""</span>
+    <span class="n">setup_role_groups</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="remember_previous_approval">
+<a class="viewcode-back" href="../../api.html#news.signals.remember_previous_approval">[docs]</a>
+<span class="nd">@receiver</span><span class="p">(</span><span class="n">pre_save</span><span class="p">,</span> <span class="n">sender</span><span class="o">=</span><span class="n">Article</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">remember_previous_approval</span><span class="p">(</span><span class="n">sender</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Record whether the article was already approved before this save."""</span>
+    <span class="k">if</span> <span class="n">instance</span><span class="o">.</span><span class="n">pk</span><span class="p">:</span>
+        <span class="n">instance</span><span class="o">.</span><span class="n">_was_approved</span> <span class="o">=</span> <span class="n">Article</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+            <span class="n">pk</span><span class="o">=</span><span class="n">instance</span><span class="o">.</span><span class="n">pk</span><span class="p">,</span> <span class="n">approved</span><span class="o">=</span><span class="kc">True</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">instance</span><span class="o">.</span><span class="n">_was_approved</span> <span class="o">=</span> <span class="kc">False</span></div>
+
+
+
+<div class="viewcode-block" id="handle_article_approval">
+<a class="viewcode-back" href="../../api.html#news.signals.handle_article_approval">[docs]</a>
+<span class="nd">@receiver</span><span class="p">(</span><span class="n">post_save</span><span class="p">,</span> <span class="n">sender</span><span class="o">=</span><span class="n">Article</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">handle_article_approval</span><span class="p">(</span><span class="n">sender</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">raw</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Notify subscribers when an article changes to approved.</span>
+
+<span class="sd">    Saving an already-approved article again does nothing, so editing the</span>
+<span class="sd">    text later never re-sends the e-mail.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">raw</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">instance</span><span class="o">.</span><span class="n">approved</span><span class="p">:</span>
+        <span class="k">return</span>
+    <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="s2">"_was_approved"</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+        <span class="k">return</span>
+    <span class="n">send_approval_email</span><span class="p">(</span><span class="n">instance</span><span class="p">)</span>
+    <span class="n">post_approved_article</span><span class="p">(</span><span class="n">instance</span><span class="p">)</span>
+    <span class="n">instance</span><span class="o">.</span><span class="n">_was_approved</span> <span class="o">=</span> <span class="kc">True</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_purge_non_reader_subscriptions</span><span class="p">(</span><span class="n">sender</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">action</span><span class="p">,</span> <span class="n">reverse</span><span class="p">,</span>
+                                    <span class="n">pk_set</span><span class="p">,</span> <span class="n">field_name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Remove subscriptions that were just added for non-readers."""</span>
+    <span class="k">if</span> <span class="n">action</span> <span class="o">!=</span> <span class="s2">"post_add"</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">pk_set</span><span class="p">:</span>
+        <span class="k">return</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">reverse</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">instance</span><span class="o">.</span><span class="n">is_reader</span><span class="p">:</span>
+            <span class="nb">getattr</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">field_name</span><span class="p">)</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="k">return</span>
+    <span class="c1"># Reverse side: ``instance`` is the publisher/journalist and ``pk_set``</span>
+    <span class="c1"># holds subscriber ids. Drop any subscribers who are not readers.</span>
+    <span class="n">user_model</span> <span class="o">=</span> <span class="n">get_user_model</span><span class="p">()</span>
+    <span class="n">invalid</span> <span class="o">=</span> <span class="n">user_model</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pk__in</span><span class="o">=</span><span class="n">pk_set</span><span class="p">)</span><span class="o">.</span><span class="n">exclude</span><span class="p">(</span>
+        <span class="n">role</span><span class="o">=</span><span class="n">user_model</span><span class="o">.</span><span class="n">Role</span><span class="o">.</span><span class="n">READER</span>
+    <span class="p">)</span>
+    <span class="n">instance</span><span class="o">.</span><span class="n">subscribers</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="o">*</span><span class="n">invalid</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="enforce_reader_publisher_subscriptions">
+<a class="viewcode-back" href="../../api.html#news.signals.enforce_reader_publisher_subscriptions">[docs]</a>
+<span class="nd">@receiver</span><span class="p">(</span><span class="n">m2m_changed</span><span class="p">,</span> <span class="n">sender</span><span class="o">=</span><span class="n">CustomUser</span><span class="o">.</span><span class="n">subscribed_publishers</span><span class="o">.</span><span class="n">through</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">enforce_reader_publisher_subscriptions</span><span class="p">(</span><span class="n">sender</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Only readers may subscribe to publishers."""</span>
+    <span class="n">_purge_non_reader_subscriptions</span><span class="p">(</span>
+        <span class="n">sender</span><span class="p">,</span> <span class="n">field_name</span><span class="o">=</span><span class="s2">"subscribed_publishers"</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="enforce_reader_journalist_subscriptions">
+<a class="viewcode-back" href="../../api.html#news.signals.enforce_reader_journalist_subscriptions">[docs]</a>
+<span class="nd">@receiver</span><span class="p">(</span><span class="n">m2m_changed</span><span class="p">,</span> <span class="n">sender</span><span class="o">=</span><span class="n">CustomUser</span><span class="o">.</span><span class="n">subscribed_journalists</span><span class="o">.</span><span class="n">through</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">enforce_reader_journalist_subscriptions</span><span class="p">(</span><span class="n">sender</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Only readers may subscribe to journalists."""</span>
+    <span class="n">_purge_non_reader_subscriptions</span><span class="p">(</span>
+        <span class="n">sender</span><span class="p">,</span> <span class="n">field_name</span><span class="o">=</span><span class="s2">"subscribed_journalists"</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+    <span class="p">)</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">The Newsroom</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">Code reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
