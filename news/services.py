@@ -21,6 +21,10 @@ def get_subscriber_emails(article):
 
     A reader qualifies if they subscribe to the article's author or to its
     publisher (when it has one). Readers without an address are skipped.
+
+    :param article: the approved :class:`news.models.Article`.
+    :returns: a list of unique e-mail address strings (possibly empty).
+    :rtype: list[str]
     """
     user_model = get_user_model()
     criteria = Q(subscribed_journalists=article.author)
@@ -37,8 +41,14 @@ def get_subscriber_emails(article):
 def send_approval_email(article):
     """E-mail the approved article to its subscribers.
 
-    Returns the number of recipients. Delivery errors are logged rather
-    than raised so a mail outage cannot block an editor's approval.
+    Delivery errors are logged rather than raised so a mail outage cannot
+    block an editor's approval. Subscribers are blind-copied so they cannot
+    see each other's addresses.
+
+    :param article: the approved :class:`news.models.Article`.
+    :returns: the number of recipients e-mailed (``0`` if there were none
+        or the mail could not be sent).
+    :rtype: int
     """
     recipients = get_subscriber_emails(article)
     if not recipients:
@@ -69,7 +79,13 @@ def send_approval_email(article):
 
 
 def build_approval_payload(article):
-    """Return the JSON-serialisable dict sent to ``/api/approved/``."""
+    """Return the JSON-serialisable dict sent to ``/api/approved/``.
+
+    :param article: the approved :class:`news.models.Article`.
+    :returns: a dict with the article id, title, content, author and
+        publisher names, approving editor and creation time.
+    :rtype: dict
+    """
     return {
         "article_id": article.pk,
         "title": article.title,
@@ -87,7 +103,13 @@ def build_approval_payload(article):
 def post_approved_article(article):
     """POST the approved article to our own RESTful endpoint.
 
-    Returns True on success. Network problems are logged, not raised.
+    Network problems are logged, not raised, so approval never fails
+    because the endpoint is unreachable.
+
+    :param article: the approved :class:`news.models.Article`.
+    :returns: ``True`` if the endpoint accepted the POST, otherwise
+        ``False`` (also when ``APPROVED_API_URL`` is empty).
+    :rtype: bool
     """
     if not settings.APPROVED_API_URL:
         return False
