@@ -1,0 +1,36 @@
+# Runs the app with a real MariaDB database.
+# Usage: copy .env.example to .env, set your own passwords, then:
+#   docker compose up --build
+services:
+  db:
+    image: mariadb:11
+    environment:
+      MARIADB_DATABASE: ${DB_NAME:-news_db}
+      MARIADB_USER: ${DB_USER:-news_user}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your .env file}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in your .env file}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DB_ENGINE: mariadb
+      DB_NAME: ${DB_NAME:-news_db}
+      DB_USER: ${DB_USER:-news_user}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST: db
+      DB_PORT: "3306"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:
