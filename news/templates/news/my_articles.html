@@ -1,0 +1,14 @@
+{% extends "news/base.html" %}
+{% block title %}My articles &middot; The Newsroom{% endblock %}
+{% block content %}
+  <h1>My articles</h1>
+  <p class="lede">Everything you have written, including drafts waiting for an editor.</p>
+  {% for article in articles %}
+    {% include "news/_article_card.html" with show_status=True %}
+  {% empty %}
+    <div class="empty">
+      <p>You have not written anything yet.</p>
+      <a class="btn" href="{% url 'news:article_create' %}">Write your first article</a>
+    </div>
+  {% endfor %}
+{% endblock %}

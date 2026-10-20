@@ -1,0 +1,26 @@
+{% extends "news/base.html" %}
+{% block title %}{{ newsletter.title }} &middot; The Newsroom{% endblock %}
+{% block content %}
+  <h1>{{ newsletter.title }}</h1>
+  <div class="meta">
+    Curated by {{ newsletter.author.get_username }}
+    &middot; {{ newsletter.created_at|date:"j F Y" }}
+  </div>
+  {% if newsletter.description %}
+    <p class="body-text">{{ newsletter.description }}</p>
+  {% endif %}
+
+  {% for article in articles %}
+    {% include "news/_article_card.html" %}
+  {% empty %}
+    <div class="empty"><p>This newsletter has no articles yet.</p></div>
+  {% endfor %}
+
+  <div class="actions">
+    <a class="btn secondary" href="{% url 'news:newsletter_list' %}">&larr; All newsletters</a>
+    {% if can_manage %}
+      <a class="btn" href="{% url 'news:newsletter_update' newsletter.pk %}">Edit</a>
+      <a class="btn danger" href="{% url 'news:newsletter_delete' newsletter.pk %}">Delete</a>
+    {% endif %}
+  </div>
+{% endblock %}

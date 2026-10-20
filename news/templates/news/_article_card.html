@@ -1,0 +1,18 @@
+<article class="card">
+  <h2><a href="{% url 'news:article_detail' article.pk %}">{{ article.title }}</a></h2>
+  <div class="meta">
+    By {{ article.author.get_username }}
+    &middot;
+    {% if article.publisher %}{{ article.publisher.name }}{% else %}Independent{% endif %}
+    &middot; {{ article.created_at|date:"j M Y" }}
+    {% if show_status %}
+      &middot;
+      {% if article.approved %}
+        <span class="badge ok">Approved</span>
+      {% else %}
+        <span class="badge pending">Awaiting review</span>
+      {% endif %}
+    {% endif %}
+  </div>
+  <p>{{ article.content|truncatewords:35 }}</p>
+</article>

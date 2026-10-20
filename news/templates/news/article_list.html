@@ -1,0 +1,60 @@
+{% extends "news/base.html" %}
+{% block title %}Articles &middot; The Newsroom{% endblock %}
+{% block content %}
+  <h1>Latest articles</h1>
+  <p class="lede">Approved stories from publishers and independent journalists.</p>
+
+  <div class="card">
+    <strong>Getting started as {{ user.get_role_display|lower }}</strong>
+    {% if user.is_editor %}
+      <ol>
+        <li><a href="{% url 'news:publisher_create' %}">Create a publisher</a> (or open <a href="{% url 'news:publisher_list' %}">Publishers</a>) and tick the journalists who work for it.</li>
+        <li>Open the <a href="{% url 'news:review_list' %}">Review queue</a> and approve articles. Approving notifies subscribers.</li>
+      </ol>
+    {% elif user.is_journalist %}
+      <ol>
+        <li><a href="{% url 'news:article_create' %}">Write an article</a>. Choose a publisher you belong to, or leave it independent.</li>
+        <li>An editor must approve it before readers see it. Track progress under <a href="{% url 'news:my_articles' %}">My articles</a>.</li>
+        <li>Bundle approved articles into a <a href="{% url 'news:newsletter_create' %}">newsletter</a>.</li>
+      </ol>
+    {% else %}
+      <ol>
+        <li>Pick who to follow on <a href="{% url 'news:subscriptions' %}">Subscriptions</a>.</li>
+        <li>Use <em>My subscriptions</em> below to see only their articles, and browse <a href="{% url 'news:newsletter_list' %}">Newsletters</a>.</li>
+      </ol>
+    {% endif %}
+  </div>
+
+  {% if user.is_reader %}
+    <div class="tabs" role="navigation" aria-label="Article filter">
+      <a href="{% url 'news:article_list' %}"
+         {% if not subscribed_only %}aria-current="page"{% endif %}>All</a>
+      <a href="{% url 'news:article_list' %}?filter=subscribed"
+         {% if subscribed_only %}aria-current="page"{% endif %}>My subscriptions</a>
+    </div>
+  {% endif %}
+
+  {% for article in articles %}
+    {% include "news/_article_card.html" %}
+  {% empty %}
+    <div class="empty">
+      {% if subscribed_only %}
+        <p>Nothing here yet. <a href="{% url 'news:subscriptions' %}">Choose who to follow</a>.</p>
+      {% else %}
+        <p>No articles have been published yet.</p>
+      {% endif %}
+    </div>
+  {% endfor %}
+
+  {% if is_paginated %}
+    <div class="pager">
+      {% if page_obj.has_previous %}
+        <a href="?{% if subscribed_only %}filter=subscribed&amp;{% endif %}page={{ page_obj.previous_page_number }}">&larr; Newer</a>
+      {% else %}<span></span>{% endif %}
+      <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+        <a href="?{% if subscribed_only %}filter=subscribed&amp;{% endif %}page={{ page_obj.next_page_number }}">Older &rarr;</a>
+      {% else %}<span></span>{% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "news/base.html" %}
+{% block title %}{{ page_title }} &middot; The Newsroom{% endblock %}
+{% block content %}
+  <h1>{{ page_title }}</h1>
+  <div class="card">
+    <form method="post" class="stack" novalidate>
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div class="actions">
+        <button type="submit" class="btn">{{ submit_label }}</button>
+        <a class="btn secondary" href="javascript:history.back()">Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

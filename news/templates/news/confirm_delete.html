@@ -1,0 +1,15 @@
+{% extends "news/base.html" %}
+{% block title %}Delete &middot; The Newsroom{% endblock %}
+{% block content %}
+  <h1>Delete &ldquo;{{ object }}&rdquo;?</h1>
+  <p class="lede">This cannot be undone. {{ delete_note }}</p>
+  <div class="card">
+    <form method="post">
+      {% csrf_token %}
+      <div class="actions">
+        <button type="submit" class="btn danger">Yes, delete it</button>
+        <a class="btn secondary" href="javascript:history.back()">Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

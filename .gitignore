@@ -1,0 +1,34 @@
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+local_settings.py
+staticfiles/
+media/
+
+# Secrets - never commit these
+.env
+*.env
+!.env.example
+
+# Sphinx: keep the generated HTML in docs/_build/html (the task requires it
+# to be in the repo); only the build cache is ignored.
+docs/_build/doctrees/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

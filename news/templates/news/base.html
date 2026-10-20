@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}The Newsroom{% endblock %}</title>
+  <style>
+    :root {
+      --ink: #1b1f27; --muted: #5d6676; --paper: #f6f4ef; --card: #ffffff;
+      --line: #e2ded4; --accent: #9b2c2c; --accent-dark: #742020;
+      --ok: #1f6f43; --warn: #8a5a00; --radius: 10px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink);
+      font: 17px/1.6 Georgia, "Times New Roman", serif; }
+    a { color: var(--accent); }
+    a:focus-visible, button:focus-visible, input:focus-visible,
+    textarea:focus-visible, select:focus-visible {
+      outline: 3px solid #1d4ed8; outline-offset: 2px; }
+    .skip { position: absolute; left: -999px; }
+    .skip:focus { left: 8px; top: 8px; background: #fff; padding: 8px; }
+    .wrap { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+    .site-header { background: var(--ink); color: #fff; }
+    .site-header .wrap { display: flex; flex-wrap: wrap; gap: 8px 18px;
+      align-items: center; padding-top: 12px; padding-bottom: 12px; }
+    .brand { font-weight: bold; font-size: 1.3rem; color: #fff;
+      text-decoration: none; margin-right: auto; }
+    nav { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center;
+      font: 15px/1.4 system-ui, sans-serif; }
+    nav a { color: #f1e9d8; text-decoration: none; }
+    nav a:hover { text-decoration: underline; }
+    nav .who { color: #b9c0cc; }
+    nav form { margin: 0; }
+    nav button { background: transparent; color: #f1e9d8; cursor: pointer;
+      border: 1px solid #5d6676; border-radius: 6px; padding: 3px 10px;
+      font: inherit; }
+    main { padding: 28px 0 60px; }
+    h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 6px; }
+    .lede { color: var(--muted); margin: 0 0 22px;
+      font: 15px/1.5 system-ui, sans-serif; }
+    .card { background: var(--card); border: 1px solid var(--line);
+      border-radius: var(--radius); padding: 18px 20px; margin-bottom: 16px; }
+    .card h2 { margin: 0 0 4px; font-size: 1.3rem; line-height: 1.3; }
+    .card h2 a { text-decoration: none; }
+    .meta { color: var(--muted); font: 14px/1.4 system-ui, sans-serif;
+      margin-bottom: 8px; }
+    .badge { display: inline-block; padding: 1px 9px; border-radius: 99px;
+      font: 12px/1.6 system-ui, sans-serif; border: 1px solid var(--line); }
+    .badge.ok { color: var(--ok); border-color: var(--ok); }
+    .badge.pending { color: var(--warn); border-color: var(--warn); }
+    .tabs { display: flex; gap: 8px; margin-bottom: 18px;
+      font: 15px/1.4 system-ui, sans-serif; }
+    .tabs a { padding: 5px 14px; border: 1px solid var(--line);
+      border-radius: 99px; text-decoration: none; background: var(--card); }
+    .tabs a[aria-current="page"] { background: var(--ink); color: #fff;
+      border-color: var(--ink); }
+    .btn, button.btn { display: inline-block; background: var(--accent);
+      color: #fff; border: 0; border-radius: 8px; padding: 8px 16px;
+      font: 15px/1.4 system-ui, sans-serif; cursor: pointer;
+      text-decoration: none; }
+    .btn:hover { background: var(--accent-dark); }
+    .btn.secondary { background: transparent; color: var(--ink);
+      border: 1px solid var(--line); }
+    .btn.danger { background: #7f1d1d; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .actions form { margin: 0; }
+    .messages { list-style: none; padding: 0; margin: 0 0 18px;
+      font: 15px/1.4 system-ui, sans-serif; }
+    .messages li { padding: 10px 14px; border-radius: 8px; margin-bottom: 8px;
+      background: #e8f3ec; border: 1px solid #b7d9c4; }
+    .messages li.error { background: #fbe9e9; border-color: #e4b4b4; }
+    .messages li.info { background: #e9eef8; border-color: #bccaea; }
+    form.stack p { margin: 0 0 16px; }
+    form.stack label { display: block; font: 600 15px/1.4 system-ui, sans-serif;
+      margin-bottom: 4px; }
+    form.stack input[type=text], form.stack input[type=password],
+    form.stack input[type=email], form.stack textarea, form.stack select {
+      width: 100%; padding: 9px 10px; border: 1px solid #b9b4a6;
+      border-radius: 8px; font: 16px/1.4 system-ui, sans-serif; }
+    form.stack ul { list-style: none; padding: 0; margin: 0; }
+    form.stack ul label { font-weight: normal; }
+    .helptext { color: var(--muted); font: 13px/1.4 system-ui, sans-serif; }
+    .errorlist { color: #8c1c1c; list-style: none; padding: 0; margin: 4px 0;
+      font: 14px/1.4 system-ui, sans-serif; }
+    .empty { text-align: center; color: var(--muted); padding: 40px 10px; }
+    .pager { display: flex; justify-content: space-between;
+      font: 15px/1.4 system-ui, sans-serif; }
+    .body-text { font-size: 1.1rem; }
+    @media (max-width: 560px) { h1 { font-size: 1.6rem; } }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="{% url 'news:article_list' %}">The Newsroom</a>
+      <nav aria-label="Main">
+        {% if user.is_authenticated %}
+          <a href="{% url 'news:article_list' %}">Articles</a>
+          <a href="{% url 'news:newsletter_list' %}">Newsletters</a>
+          {% if user.is_reader %}
+            <a href="{% url 'news:subscriptions' %}">Subscriptions</a>
+          {% endif %}
+          {% if perms.news.add_article %}
+            <a href="{% url 'news:my_articles' %}">My articles</a>
+            <a href="{% url 'news:article_create' %}">Write</a>
+          {% endif %}
+          {% if perms.news.add_newsletter %}
+            <a href="{% url 'news:newsletter_create' %}">New newsletter</a>
+          {% endif %}
+          {% if perms.news.view_publisher %}
+            <a href="{% url 'news:publisher_list' %}">Publishers</a>
+          {% endif %}
+          {% if perms.news.approve_article %}
+            <a href="{% url 'news:review_list' %}">Review queue</a>
+          {% endif %}
+          <span class="who">{{ user.username }} &middot; {{ user.get_role_display }}</span>
+          <form method="post" action="{% url 'logout' %}">
+            {% csrf_token %}<button type="submit">Log out</button>
+          </form>
+        {% else %}
+          <a href="{% url 'login' %}">Log in</a>
+          <a href="{% url 'news:register' %}">Sign up</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="wrap">
+      {% if messages %}
+        <ul class="messages" role="status">
+          {% for message in messages %}
+            <li class="{{ message.tags }}">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</body>
+</html>

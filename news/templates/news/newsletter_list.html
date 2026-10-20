@@ -1,0 +1,31 @@
+{% extends "news/base.html" %}
+{% block title %}Newsletters &middot; The Newsroom{% endblock %}
+{% block content %}
+  <h1>Newsletters</h1>
+  <p class="lede">Curated collections of articles from our journalists.</p>
+
+  {% for newsletter in newsletters %}
+    <article class="card">
+      <h2><a href="{% url 'news:newsletter_detail' newsletter.pk %}">{{ newsletter.title }}</a></h2>
+      <div class="meta">
+        By {{ newsletter.author.get_username }}
+        &middot; {{ newsletter.created_at|date:"j M Y" }}
+      </div>
+      <p>{{ newsletter.description|truncatewords:30 }}</p>
+    </article>
+  {% empty %}
+    <div class="empty"><p>No newsletters yet.</p></div>
+  {% endfor %}
+
+  {% if is_paginated %}
+    <div class="pager">
+      {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}">&larr; Newer</a>
+      {% else %}<span></span>{% endif %}
+      <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}">Older &rarr;</a>
+      {% else %}<span></span>{% endif %}
+    </div>
+  {% endif %}
+{% endblock %}
