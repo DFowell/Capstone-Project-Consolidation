@@ -6,17 +6,31 @@ from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 
 def is_editor(user):
-    """Return True for editors (superusers count as editors)."""
+    """Return True for editors (superusers count as editors).
+
+    :param user: the user to check.
+    :rtype: bool
+    """
     return user.is_authenticated and (user.is_superuser or user.is_editor)
 
 
 def is_journalist(user):
-    """Return True for journalists."""
+    """Return True for journalists.
+
+    :param user: the user to check.
+    :rtype: bool
+    """
     return user.is_authenticated and user.is_journalist
 
 
 def can_manage(user, owner_id):
-    """Editors may manage anything; journalists only their own content."""
+    """Say whether a user may change or delete a piece of content.
+
+    :param user: the user attempting the change.
+    :param owner_id: primary key of the content's author.
+    :returns: ``True`` for editors, or for the journalist who owns it.
+    :rtype: bool
+    """
     return is_editor(user) or (is_journalist(user) and user.pk == owner_id)
 
 
