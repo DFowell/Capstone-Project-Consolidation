@@ -2,6 +2,10 @@
 
 This module deliberately imports nothing from ``news.models`` so that the
 models can import it without creating a circular import.
+
+``ROLE_GROUP_NAMES`` maps a role value (``"reader"``, ``"editor"``,
+``"journalist"``) to its group name, and ``ROLE_PERMISSIONS`` lists the
+permission codenames each group receives.
 """
 from django.contrib.auth.models import Group, Permission
 
@@ -40,7 +44,10 @@ def setup_role_groups():
     """Create the three role groups and assign their permissions.
 
     Safe to run repeatedly: groups are fetched or created and their
-    permission sets are replaced with the definitions above.
+    permission sets are replaced with the definitions above. It runs
+    automatically after every ``migrate`` (see :mod:`news.signals`).
+
+    :returns: ``None``.
     """
     for role, codenames in ROLE_PERMISSIONS.items():
         group, _created = Group.objects.get_or_create(
